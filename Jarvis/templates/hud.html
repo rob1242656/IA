@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS VIII — Ambient Awareness</title>
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#030912;--panel:rgba(3,14,28,.93);
+  --cyan:#00d4ff;--gold:#e8b923;--red:#e84040;--green:#00ff88;--orange:#ff7b00;
+  --border:rgba(0,212,255,.2);--glow:0 0 20px rgba(0,212,255,.4);
+  --text:#c8eeff;--dim:rgba(200,238,255,.4);
+}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Share Tech Mono',monospace;background:var(--bg);color:var(--text);
+     display:flex;flex-direction:column;
+     background-image:repeating-linear-gradient(0deg,transparent,transparent 3px,
+       rgba(0,0,0,.05) 3px,rgba(0,0,0,.05) 4px);}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse 80% 50% at 50% 100%,rgba(0,50,100,.3),transparent 70%);}
+
+/* TOPBAR */
+#top{z-index:10;padding:9px 20px;background:var(--panel);
+     border-bottom:1px solid var(--border);
+     display:flex;align-items:center;justify-content:space-between;
+     backdrop-filter:blur(12px);}
+.logo{font-family:'Orbitron',sans-serif;font-weight:900;font-size:1.2rem;
+      letter-spacing:5px;
+      background:linear-gradient(90deg,var(--gold),var(--cyan));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.logo small{font-size:.6rem;letter-spacing:2px;color:var(--dim);
+            -webkit-text-fill-color:var(--dim);display:block;margin-top:1px;}
+#topRight{display:flex;gap:14px;align-items:center;font-size:.7rem;}
+.ts{display:flex;align-items:center;gap:5px;color:var(--dim);}
+.ts i{color:var(--cyan);font-size:.75rem;}
+.ts b{color:var(--text);}
+#connDot{width:8px;height:8px;border-radius:50%;background:var(--red);animation:blink 2s infinite;}
+.online{background:var(--green)!important;}
+#clk{font-family:'VT323',monospace;font-size:1.3rem;color:var(--gold);letter-spacing:2px;}
+
+/* AMBIENT BADGE */
+#ambBadge{
+  display:flex;align-items:center;gap:6px;
+  background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.3);
+  padding:4px 10px;border-radius:2px;font-size:.65rem;color:var(--green);
+}
+#ambBadge .adot{width:6px;height:6px;border-radius:50%;background:var(--green);
+                animation:blink 1.5s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.2;}}
+
+/* MAIN */
+#main{flex:1;overflow:hidden;display:grid;grid-template-columns:208px 1fr 192px;position:relative;z-index:5;}
+
+/* SIDE PANELS */
+.side{background:var(--panel);padding:12px 10px;display:flex;flex-direction:column;
+      gap:8px;overflow-y:auto;backdrop-filter:blur(10px);}
+#left{border-right:1px solid var(--border);}
+#right{border-left:1px solid var(--border);}
+.pt{font-family:'Orbitron',sans-serif;font-size:.56rem;letter-spacing:3px;
+    color:var(--gold);border-bottom:1px solid rgba(232,185,35,.25);
+    padding-bottom:5px;margin-bottom:2px;}
+.met{font-size:.7rem;margin:2px 0;}
+.met .l{color:var(--dim);}
+.met .v{float:right;color:var(--text);}
+.bar{height:3px;background:rgba(0,212,255,.1);border-radius:2px;
+     margin-top:3px;overflow:hidden;clear:both;}
+.fill{height:100%;border-radius:2px;transition:width .6s;background:var(--cyan);}
+.fill.hot{background:var(--red)!important;}
+.fill.warm{background:var(--orange)!important;}
+
+.qb{display:block;width:100%;text-align:left;
+    background:rgba(0,212,255,.05);border:1px solid var(--border);
+    color:var(--cyan);padding:6px 9px;border-radius:2px;cursor:pointer;
+    font-family:'Share Tech Mono',monospace;font-size:.7rem;
+    transition:all .2s;margin-bottom:2px;}
+.qb:hover{background:rgba(0,212,255,.14);border-color:var(--cyan);box-shadow:var(--glow);}
+.qb.desktop{border-color:rgba(0,255,136,.3);color:var(--green);}
+.qb.desktop:hover{background:rgba(0,255,136,.12);border-color:var(--green);}
+
+.card{background:rgba(0,212,255,.04);border:1px solid var(--border);
+      border-radius:2px;padding:8px;}
+.ct{font-size:.58rem;color:var(--gold);letter-spacing:2px;margin-bottom:4px;}
+.cv{font-size:.76rem;}
+.ni{font-size:.66rem;color:var(--dim);margin-bottom:6px;line-height:1.4;
+    border-left:2px solid var(--border);padding-left:5px;}
+.ni:hover{color:var(--text);border-color:var(--cyan);}
+
+/* ALERT TOAST */
+#toasts{position:fixed;top:60px;right:200px;z-index:100;
+        display:flex;flex-direction:column;gap:6px;pointer-events:none;}
+.toast{
+  background:var(--panel);border-radius:3px;padding:10px 14px;
+  font-size:.75rem;max-width:300px;animation:tin .3s ease;
+  backdrop-filter:blur(10px);border-left:3px solid var(--cyan);
+}
+.toast.warning{border-color:var(--orange);}
+.toast.danger{border-color:var(--red);}
+.toast.info{border-color:var(--cyan);}
+.toast-title{font-family:'Orbitron',sans-serif;font-size:.6rem;
+             letter-spacing:2px;margin-bottom:3px;}
+@keyframes tin{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+
+/* DESKTOP EVENT FLASH */
+#dFlash{
+  display:none;position:fixed;inset:0;z-index:200;pointer-events:none;
+  background:rgba(0,255,136,.04);
+  border:2px solid rgba(0,255,136,.5);
+}
+#dFlash.show{display:block;animation:flash .6s ease forwards;}
+@keyframes flash{0%{opacity:1;}100%{opacity:0;}}
+
+/* CENTER CHAT */
+#center{display:flex;flex-direction:column;min-height:0;}
+#msgs{flex:1;overflow-y:auto;min-height:0;padding:16px 20px;
+      display:flex;flex-direction:column;gap:11px;
+      scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
+.msg{max-width:76%;padding:11px 15px;border-radius:2px;
+     font-size:.81rem;line-height:1.65;animation:pop .3s cubic-bezier(.34,1.56,.64,1);}
+@keyframes pop{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+.msg.user{align-self:flex-end;
+  background:linear-gradient(135deg,rgba(0,100,200,.3),rgba(0,212,255,.1));
+  border:1px solid rgba(0,212,255,.3);border-bottom-right-radius:0;}
+.msg.bot{align-self:flex-start;background:rgba(3,14,28,.85);
+  border:1px solid var(--border);border-left:3px solid var(--gold);
+  border-bottom-left-radius:0;}
+.msg.bot .bl{font-family:'Orbitron',sans-serif;font-size:.53rem;
+             letter-spacing:3px;color:var(--gold);margin-bottom:5px;
+             display:flex;align-items:center;gap:5px;}
+.msg.bot .bl::after{content:'';flex:1;height:1px;background:rgba(232,185,35,.2);}
+.msg.ambient{border-left:3px solid var(--green) !important;
+             background:rgba(0,255,136,.04) !important;}
+.mtime{font-size:.58rem;color:var(--dim);margin-top:5px;text-align:right;}
+.msg strong{color:var(--cyan);}
+.msg code{background:rgba(0,212,255,.08);padding:1px 4px;
+          border-radius:2px;font-size:.78rem;color:#aaefff;}
+
+.typing{align-self:flex-start;padding:11px 15px;background:rgba(3,14,28,.85);
+        border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:2px;}
+.typing span{display:inline-block;width:5px;height:5px;background:var(--gold);
+             border-radius:50%;margin:0 2px;animation:td .7s infinite;}
+.typing span:nth-child(2){animation-delay:.15s;}
+.typing span:nth-child(3){animation-delay:.3s;}
+@keyframes td{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
+
+/* INPUT */
+#inpRow{padding:12px 18px;border-top:1px solid var(--border);
+        background:var(--panel);backdrop-filter:blur(10px);
+        display:flex;gap:7px;align-items:center;}
+#inp{flex:1;background:rgba(0,212,255,.05);border:1px solid var(--border);
+     color:var(--cyan);padding:8px 12px;border-radius:2px;
+     font-family:'Share Tech Mono',monospace;font-size:.87rem;outline:none;transition:border .2s;}
+#inp:focus{border-color:var(--cyan);box-shadow:var(--glow);}
+#inp::placeholder{color:var(--dim);}
+.ib{background:rgba(0,212,255,.06);border:1px solid var(--border);
+    color:var(--cyan);padding:8px 12px;border-radius:2px;cursor:pointer;
+    font-family:'Share Tech Mono',monospace;font-size:.78rem;transition:all .2s;}
+.ib:hover{background:rgba(0,212,255,.16);border-color:var(--cyan);box-shadow:var(--glow);}
+#sndBtn{background:linear-gradient(135deg,rgba(232,185,35,.2),rgba(0,212,255,.1));
+        border-color:var(--gold);color:var(--gold);
+        font-family:'Orbitron',sans-serif;font-size:.68rem;letter-spacing:1px;}
+#sndBtn:hover{background:rgba(232,185,35,.3);}
+#micBtn{width:38px;height:38px;border-radius:50%;padding:0;
+        display:flex;align-items:center;justify-content:center;}
+#micBtn.rec{background:rgba(232,64,64,.3);border-color:var(--red);color:var(--red);
+            animation:rp 1s infinite;}
+@keyframes rp{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}
+
+/* FOOTER */
+#foot{padding:5px 20px;border-top:1px solid var(--border);
+      background:var(--panel);display:flex;justify-content:space-between;
+      font-size:.6rem;color:var(--dim);z-index:10;}
+</style>
+</head>
+<body>
+
+<div id="dFlash"></div>
+<div id="toasts"></div>
+
+<!-- TOP -->
+<div id="top">
+  <div class="logo">◈ JARVIS VIII <small>AMBIENT AWARENESS · IRON MAN EDITION</small></div>
+  <div id="topRight">
+    <div class="ts"><div id="connDot"></div><b id="connTxt">OFFLINE</b></div>
+    <div class="ts"><i class="fa fa-microchip"></i><b id="tCpu">--</b></div>
+    <div class="ts"><i class="fa fa-memory"></i><b id="tRam">--</b></div>
+    <div id="ambBadge"><div class="adot"></div>AMBIENT ACTIVE</div>
+    <div id="clk">--:--:--</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <!-- LEFT -->
+  <div class="side" id="left">
+    <div class="pt">◈ SYSTEMS</div>
+    <div class="met"><span class="l">CPU</span><span class="v" id="mCpu">--%</span>
+      <div class="bar"><div class="fill" id="bCpu" style="width:0%"></div></div></div>
+    <div class="met"><span class="l">RAM</span><span class="v" id="mRam">--</span>
+      <div class="bar"><div class="fill" id="bRam" style="width:0%"></div></div></div>
+    <div class="met"><span class="l">DISK C:</span><span class="v" id="mDisk">--</span>
+      <div class="bar"><div class="fill" id="bDisk" style="width:0%"></div></div></div>
+    <div class="met" id="mTempRow"><span class="l" id="mTempLabel">FREQ</span><span class="v" id="mTemp">--</span></div>
+    <div class="met"><span class="l">NET ↑</span><span class="v" id="mUp">--</span></div>
+    <div class="met"><span class="l">NET ↓</span><span class="v" id="mDn">--</span></div>
+
+    <div class="pt" style="margin-top:8px">◈ DESKTOP CONTROL</div>
+    <button class="qb desktop" onclick="q('silencio')">🖥 Silencio — minimiza TODO</button>
+    <button class="qb desktop" onclick="q('restaura ventanas')">↩ Restaurar ventanas</button>
+    <button class="qb desktop" onclick="q('qué tengo abierto')">👁 Ver ventanas</button>
+
+    <div class="pt" style="margin-top:6px">◈ QUICK</div>
+    <button class="qb" onclick="q('estado del sistema')">🖥 Monitor</button>
+    <button class="qb" onclick="q('clima')">🌤 Clima</button>
+    <button class="qb" onclick="q('noticias tech')">📰 News</button>
+    <button class="qb" onclick="q('github')">🔗 GitHub</button>
+    <button class="qb" onclick="q('spotify pausa')">⏸ Spotify</button>
+    <button class="qb" onclick="q('spotify siguiente')">⏭ Next</button>
+  </div>
+
+  <!-- CENTER -->
+  <div id="center">
+    <div id="msgs"></div>
+    <div id="inpRow">
+      <input id="inp" placeholder="Comando o consulta... (o di 'Jarvis' al microfono)" onkeydown="kp(event)">
+      <button class="ib" id="micBtn" onclick="tMic()" title="Voz manual"><i class="fas fa-microphone"></i></button>
+      <button class="ib" id="sndBtn" onclick="send()"><i class="fas fa-bolt"></i> ENVIAR</button>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="side" id="right">
+    <div class="pt">◈ INTEL</div>
+    <div class="card"><div class="ct">CLIMA</div><div class="cv" id="wCard">Cargando...</div></div>
+    <div class="card"><div class="ct">PROYECTO</div><div class="cv">Jarvis V8 Ultimate</div></div>
+    <div class="card"><div class="ct">AMBIENT</div>
+      <div class="cv" style="font-size:.68rem;color:var(--green)">
+        🎤 Siempre escuchando<br>
+        🖥 "Silencio" → escritorio<br>
+        🔔 Alertas proactivas
+      </div>
+    </div>
+    <div class="pt" style="margin-top:4px">◈ NEWS</div>
+    <div id="newsPanel"><div class="ni">Cargando...</div></div>
+  </div>
+</div>
+
+<!-- FOOT -->
+<div id="foot">
+  <span>JARVIS V8 · AMBIENT AWARE · ALL SYSTEMS NOMINAL</span>
+  <span id="fUp">UPTIME: --</span>
+  <span>⚡ CLAUDE SONNET 4 · ANTHROPIC</span>
+</div>
+
+<script>
+const S = io();
+let recOn = false, recog = null, sending = false;
+
+/* ── Connection ─────────────────────────── */
+S.on('connect', () => {
+  setConn(true);
+  S.emit('greeting');
+  setTimeout(() => S.emit('load_news'), 900);
+  setTimeout(() => S.emit('load_weather'), 1400);
+});
+S.on('disconnect', () => {
+  setConn(false);
+  addMsg('⚠️ Conexion perdida. Reconectando...', 'bot');
+});
+S.on('reconnect', () => {
+  setConn(true);
+  addMsg('✅ Reconectado.', 'bot');
+  S.emit('greeting');
+});
+function setConn(ok) {
+  document.getElementById('connDot').className = ok ? 'online' : '';
+  document.getElementById('connTxt').textContent = ok ? 'ONLINE' : 'OFFLINE';
+}
+
+/* ── Events ─────────────────────────────── */
+S.on('greeting',        d => addMsg(d.text, 'bot'));
+S.on('response',        d => { rmTyping(); addMsg(d.text, 'bot'); });
+S.on('ambient_response', d => { rmTyping(); addMsg('🎤 ' + d.text, 'bot', true); });
+S.on('voice_active',    d => addMsg(d.text, 'bot', true));
+S.on('voice_detected',  d => addMsg('[VOZ] ' + d.text, 'user'));
+S.on('stats',           d => applyStats(d));
+S.on('reminder',        d => toast('info', '⏰ Recordatorio', d.text));
+S.on('news_data',       d => renderNews(d));
+S.on('weather_data',    d => renderWeather(d));
+S.on('proactive_alert', d => toast(d.type, d.icon + ' ' + d.title, d.message));
+S.on('desktop_clear',   d => { flashDesktop(); addMsg('🖥️ ' + d.result, 'bot', true); });
+S.on('desktop_restore', d => addMsg('🖥️ ' + d.result, 'bot', true));
+
+/* ── Clock ──────────────────────────────── */
+setInterval(() => {
+  const n = new Date();
+  document.getElementById('clk').textContent =
+    n.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}, 1000);
+
+/* Stats ahora llegan por server-push (cada 5s).
+   Reminder check cada 30s como fallback */
+setInterval(() => S.emit('reminder_check'), 30000);
+
+/* ── Stats ──────────────────────────────── */
+function applyStats(d) {
+  if (!d || d.error) return;
+  sBar('mCpu', 'bCpu', d.cpu + '%', d.cpu);
+  sBar('mRam', 'bRam', d.ram_used + '/' + d.ram_total + 'GB', d.ram);
+  sBar('mDisk', 'bDisk', d.disk_used_gb + '/' + d.disk_total_gb + 'GB', d.disk);
+  // Temperatura o frecuencia
+  if (d.cpu_temp > 0) {
+    document.getElementById('mTempLabel').textContent = 'TEMP';
+    document.getElementById('mTemp').textContent = d.cpu_temp + '°C';
+  } else if (d.cpu_freq > 0) {
+    document.getElementById('mTempLabel').textContent = 'FREQ';
+    document.getElementById('mTemp').textContent = d.cpu_freq + ' MHz';
+  }
+  // Red: velocidad actual en KB/s o MB/s
+  document.getElementById('mUp').textContent = fmtSpeed(d.net_up);
+  document.getElementById('mDn').textContent = fmtSpeed(d.net_down);
+  // Top bar
+  document.getElementById('tCpu').textContent = 'CPU ' + d.cpu + '%';
+  document.getElementById('tRam').textContent = 'RAM ' + d.ram_used + '/' + d.ram_total + 'G';
+  document.getElementById('fUp').textContent = 'UPTIME: ' + (d.uptime || '--');
+}
+function fmtSpeed(kbs) {
+  if (kbs >= 1024) return (kbs / 1024).toFixed(1) + ' MB/s';
+  return Math.round(kbs) + ' KB/s';
+}
+function sBar(iv, ib, lbl, pct) {
+  document.getElementById(iv).textContent = lbl;
+  const b = document.getElementById(ib);
+  b.style.width = Math.min(pct, 100) + '%';
+  b.className = 'fill' + (pct > 88 ? ' hot' : pct > 70 ? ' warm' : '');
+}
+
+/* ── Chat (con debouncing) ──────────────── */
+function send() {
+  if (sending) return;  // Debounce
+  const v = document.getElementById('inp').value.trim();
+  if (!v) return;
+  sending = true;
+  addMsg(v, 'user');
+  showTyping();
+  S.emit('msg', {text: v});
+  document.getElementById('inp').value = '';
+  setTimeout(() => { sending = false; }, 500);
+}
+function kp(e) { if (e.key === 'Enter') send(); }
+function q(cmd) {
+  if (sending) return;
+  sending = true;
+  addMsg(cmd, 'user');
+  showTyping();
+  S.emit('msg', {text: cmd});
+  setTimeout(() => { sending = false; }, 500);
+}
+
+function addMsg(raw, role, isAmb) {
+  isAmb = isAmb || false;
+  const wrap = document.getElementById('msgs');
+  const d = document.createElement('div');
+  d.className = 'msg ' + (role === 'bot' ? 'bot' : 'user') + (isAmb ? ' ambient' : '');
+  const t = new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'});
+
+  // Escape HTML first
+  let html = String(raw)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Simple markdown
+  try {
+    html = html
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\n/g, '<br>');
+  } catch(e) {
+    html = html.replace(/\n/g, '<br>');
+  }
+
+  const label = role === 'bot'
+    ? '<div class="bl"><i class="fas fa-robot" style="font-size:.55rem"></i> ◈ JARVIS VIII</div>'
+    : '';
+  d.innerHTML = label + '<div>' + html + '</div><div class="mtime">' + t + '</div>';
+  wrap.appendChild(d);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function showTyping() {
+  const wrap = document.getElementById('msgs');
+  const d = document.createElement('div');
+  d.className = 'typing';
+  d.id = 'typingInd';
+  d.innerHTML = '<span></span><span></span><span></span>';
+  wrap.appendChild(d);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+function rmTyping() {
+  const el = document.getElementById('typingInd');
+  if (el) el.remove();
+}
+
+/* ── Voice (manual) ─────────────────────── */
+function tMic() {
+  if (!recog) {
+    recog = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recog.lang = 'es-ES';
+    recog.continuous = false;
+    recog.onresult = e => {
+      document.getElementById('inp').value = e.results[0][0].transcript;
+      send();
+    };
+    recog.onend = () => { recOn = false; document.getElementById('micBtn').classList.remove('rec'); };
+    recog.onerror = () => { recOn = false; document.getElementById('micBtn').classList.remove('rec'); };
+  }
+  if (!recOn) { recog.start(); recOn = true; document.getElementById('micBtn').classList.add('rec'); }
+  else { recog.stop(); recOn = false; }
+}
+
+/* ── Cards ──────────────────────────────── */
+function renderWeather(w) {
+  if (!w) return;
+  const mk = w.mock ? ' <small style="color:var(--dim)">(sin API key)</small>' : '';
+  document.getElementById('wCard').innerHTML =
+    w.city + mk + '<br>' + w.temp + '°C · ' + w.desc + '<br>💧' + w.humidity + '% 💨' + w.wind + 'km/h';
+}
+function renderNews(items) {
+  if (!items || !items.length) return;
+  document.getElementById('newsPanel').innerHTML =
+    items.slice(0, 4).map(n =>
+      '<div class="ni">▸ ' + n.title.substring(0, 58) + '... <b style="color:var(--gold)">★' + n.score + '</b></div>'
+    ).join('');
+}
+
+/* ── Toast notifications (sanitized) ─────── */
+function toast(type, title, msg) {
+  const c = document.getElementById('toasts');
+  const d = document.createElement('div');
+  d.className = 'toast ' + type;
+  const tEl = document.createElement('div');
+  tEl.className = 'toast-title';
+  tEl.textContent = title;
+  const mEl = document.createElement('div');
+  mEl.textContent = msg;
+  d.appendChild(tEl);
+  d.appendChild(mEl);
+  c.appendChild(d);
+  setTimeout(() => d.style.opacity = '0', 4500);
+  setTimeout(() => d.remove(), 5000);
+}
+
+/* ── Desktop flash effect ─────────────────── */
+function flashDesktop() {
+  const f = document.getElementById('dFlash');
+  f.className = 'show';
+  setTimeout(() => f.className = '', 700);
+}
+
+/* Notification permission */
+if (window.Notification && Notification.permission === 'default')
+  Notification.requestPermission();
+</script>
+</body>
+</html>

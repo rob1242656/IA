@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# Secrets
+.env
+*.env
+
+# IDE / OS
+.claude/
+*.lnk
+0
+
+# Large binary model files (track separately or use Git LFS)
+*.zip
+*.pkl
+
+# Tensorboard logs (regenerable)
+tensorboard/
+
+# Training logs (regenerable)
+logs/
+
+# Model checkpoints (large binaries)
+models/
