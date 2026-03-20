@@ -201,9 +201,24 @@ for fi, frame_data in enumerate(traj):
 # Suavizar curvas de animación (interpolación Bezier → Linear para física realista)
 for obj in partes.values():
     if obj.animation_data and obj.animation_data.action:
-        for fc in obj.animation_data.action.fcurves:
-            for kp in fc.keyframe_points:
-                kp.interpolation = 'LINEAR'
+        action = obj.animation_data.action
+        # Blender 5.x: fcurves puede estar en action.fcurves o action.layers
+        try:
+            curves = action.fcurves
+            for fc in curves:
+                for kp in fc.keyframe_points:
+                    kp.interpolation = 'LINEAR'
+        except AttributeError:
+            # Blender 5.1+: usar layers API
+            try:
+                for layer in action.layers:
+                    for strip in layer.strips:
+                        for channelbag in strip.channelbags:
+                            for fc in channelbag.fcurves:
+                                for kp in fc.keyframe_points:
+                                    kp.interpolation = 'LINEAR'
+            except Exception:
+                pass  # si no se puede suavizar, las curvas quedan Bezier (aceptable)
 
 # ─────────────────────────────────────────────
 # 7. CÁMARA (sigue al torso)
@@ -274,14 +289,14 @@ scene.cycles.use_denoising       = True
 scene.render.resolution_x        = 1920
 scene.render.resolution_y        = 1080
 scene.render.fps                 = 60
-scene.render.image_settings.file_format = 'FFMPEG'
-scene.render.ffmpeg.format       = 'MPEG4'
-scene.render.ffmpeg.codec        = 'H264'
-scene.render.filepath            = r"C:\Users\wenas\OneDrive\Escritorio\Ia\sonso_render.mp4"
+# Blender 5.x: FFMPEG removido, renderizar como secuencia PNG
+scene.render.image_settings.file_format = 'PNG'
+scene.render.filepath            = r"C:\Users\wenas\OneDrive\Escritorio\Ia\sonso_render\frame_"
 
 # Motion blur
 scene.render.use_motion_blur     = True
 scene.render.motion_blur_shutter = 0.5
 
-print(f"[Sonso] ✅ Escena lista: {n_frames} frames | {n_frames/60:.1f} segundos")
-print(f"[Sonso] Presiona Spacebar para previsualizar, Ctrl+F12 para renderizar.")
+print(f"[Sonso] Escena lista: {n_frames} frames | {n_frames/60:.1f} segundos")
+print(f"[Sonso] Spacebar para previsualizar, Ctrl+F12 para renderizar a PNG.")
+print(f"[Sonso] Luego unir PNGs con: ffmpeg -r 60 -i sonso_render/frame_%%04d.png -c:v libx264 sonso_render.mp4")

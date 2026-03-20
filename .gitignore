@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 venv/
+venv_dml/
 .venv/
 
 # Secrets
@@ -14,9 +15,10 @@ venv/
 *.lnk
 0
 
-# Large binary model files (track separately or use Git LFS)
+# Large binary files (models, checkpoints)
 *.zip
 *.pkl
+models/
 
 # Tensorboard logs (regenerable)
 tensorboard/
@@ -24,5 +26,6 @@ tensorboard/
 # Training logs (regenerable)
 logs/
 
-# Model checkpoints (large binaries)
-models/
+# Render output
+sonso_render/
+sonso_trajectory.json
